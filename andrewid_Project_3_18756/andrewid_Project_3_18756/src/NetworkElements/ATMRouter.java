@@ -19,7 +19,7 @@ public class ATMRouter implements IATMCellConsumer{
 	private ArrayList<ATMNIC> nics = new ArrayList<ATMNIC>(); // all of the nics in this router
 	private TreeMap<Integer, ATMNIC> nextHop = new TreeMap<Integer, ATMNIC>(); // a map of which interface to use to get to a given router on the network
 	private TreeMap<Integer, NICVCPair> VCtoVC = new TreeMap<Integer, NICVCPair>(); // a map of input VC to output nic and new VC number
-	private boolean trace=false; // should we print out debug code?
+	private boolean trace=true; // should we print out debug code?
 	private int traceID = (int) (Math.random() * 100000); // create a random trace id for cells
 	private ATMNIC currentConnAttemptNIC = null; // The nic that is currently trying to setup a connection
 	private boolean displayCommands = true; // should we output the commands that are received?
@@ -50,7 +50,7 @@ public class ATMRouter implements IATMCellConsumer{
 	 */
 	public void receiveCell(ATMCell cell, ATMNIC nic){
 		if(trace)
-			System.out.println("Trace (ATMRouter): Received a cell " + cell.getTraceID());
+			System.out.println("Trace (ATMRouter): Received a cell " + cell.getTraceID()+" at router : "+this.address);
 		
 		if(cell.getIsOAM()){
 			// What's OAM for?
@@ -77,32 +77,43 @@ public class ATMRouter implements IATMCellConsumer{
 				this.receivedEndAck(cell);
 			}
 			else{
-				//Wrong data
+				//Bad Cell
 			}
+
 		}
 		else{
-			// find the nic and new VC number to forward the cell on
-			// otherwise the cell has nowhere to go. output to the console and drop the cell
 			int cellVC = cell.getVC();
 			NICVCPair pair = this.VCtoVC.get(cellVC);
 			
-			int VCToForwardTo = pair.getVC();
-			ATMNIC nicToForwardTo = pair.getNIC();
-			
-			String cellData = cell.getData();
-			int cellTraceID = cell.getTraceID();
-			
-			ATMCell cellToBeForwarded = new ATMCell(VCToForwardTo,cellData,cellTraceID);
-			
-			nicToForwardTo.sendCell(cellToBeForwarded, this);
-		}		
-	}
+			if(pair!=null ) {
+				int VCToForwardTo = pair.getVC();
+				ATMNIC nicToForwardTo = pair.getNIC();
+				
+				String cellData = cell.getData();
+				int cellTraceID = cell.getTraceID();
+				
+				ATMCell cellToBeForwarded = new ATMCell(VCToForwardTo,cellData,cellTraceID);
+				
+				nicToForwardTo.sendCell(cellToBeForwarded, this);
+			} else {
+				if(this.VCtoVC.get(cell.getVC()) == null && this.trace ){
+					System.out.println("Trace (ATMRouter): Cell Reached Destination!");
+				}
+			}
+		}
+	}		
 	
 	public void forwardCell(ATMNIC nic, String signalData, int traceID) {
 		ATMCell newCell = new ATMCell(0, signalData, traceID);
 		newCell.setIsOAM(true);
 		this.sentCallProceeding(newCell);
 		nic.sendCell(newCell, this);
+	}
+	
+	public ATMCell getNewOAMCell(String signalData, int traceID) {
+		ATMCell newCell = new ATMCell(0, signalData,traceID );
+		newCell.setIsOAM(true);
+		return newCell;
 	}
 	
 	public void forwardCell(ATMNIC nic, String signalData, ATMCell cell ) {
